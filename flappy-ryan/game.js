@@ -203,16 +203,16 @@
       const osc = this.ctx.createOscillator();
       const gain = this.ctx.createGain();
       osc.type = 'sine';
-      osc.frequency.setValueAtTime(290, now);
-      osc.frequency.exponentialRampToValueAtTime(560, now + 0.09);
+      osc.frequency.setValueAtTime(310, now);
+      osc.frequency.exponentialRampToValueAtTime(620, now + 0.09);
 
-      gain.gain.setValueAtTime(0.14, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
+      gain.gain.setValueAtTime(0.38, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.11);
 
       osc.connect(gain);
       gain.connect(this.ctx.destination);
       osc.start(now);
-      osc.stop(now + 0.1);
+      osc.stop(now + 0.11);
     }
 
     tick(isGo = false) {
@@ -226,13 +226,13 @@
       osc.type = 'triangle';
       osc.frequency.setValueAtTime(isGo ? 880 : 440, now);
 
-      gain.gain.setValueAtTime(0.16, now);
-      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.14);
+      gain.gain.setValueAtTime(0.4, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
 
       osc.connect(gain);
       gain.connect(this.ctx.destination);
       osc.start(now);
-      osc.stop(now + 0.15);
+      osc.stop(now + 0.16);
     }
 
     score(isMilestone = false) {
@@ -249,13 +249,13 @@
         const start = now + idx * 0.065;
         osc.frequency.setValueAtTime(freq, start);
 
-        gain.gain.setValueAtTime(0.15, start);
-        gain.gain.exponentialRampToValueAtTime(0.001, start + 0.18);
+        gain.gain.setValueAtTime(0.42, start);
+        gain.gain.exponentialRampToValueAtTime(0.001, start + 0.19);
 
         osc.connect(gain);
         gain.connect(this.ctx.destination);
         osc.start(start);
-        osc.stop(start + 0.19);
+        osc.stop(start + 0.2);
       });
     }
 
@@ -271,7 +271,7 @@
       osc.frequency.setValueAtTime(190, now);
       osc.frequency.exponentialRampToValueAtTime(48, now + 0.28);
 
-      gain.gain.setValueAtTime(0.22, now);
+      gain.gain.setValueAtTime(0.46, now);
       gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
 
       osc.connect(gain);
@@ -284,17 +284,104 @@
   const sfx = new SoundFX();
 
   // Background Music (Alabama.mp3)
+  // Uses Web Audio GainNode so volume is properly reduced on iOS Safari (where HTMLAudioElement.volume is locked at 1.0)
+  // and automatically stops when leaving Safari / switching apps.
+  const MUSIC_GAIN_LEVEL = 0.15; // Soft background level so game SFX stay loud and clear
   const bgMusic = new Audio('audio/Alabama.mp3');
   bgMusic.loop = true;
-  bgMusic.volume = 0.6;
+  bgMusic.volume = MUSIC_GAIN_LEVEL;
   bgMusic.preload = 'auto';
 
-  function playMusic(restartIfStopped = false) {
-    if (!soundEnabled) return;
-    try {
-      if (restartIfStopped && bgMusic.paused) {
-        bgMusic.currentTime = 0;
+  let musicBuffer = null;
+  let musicSourceNode = null;
+  let musicGainNode = null;
+  let musicStartTime = 0;
+  let musicPauseOffset = 0;
+  let musicIsPlaying = false;
+  let mediaElementConnected = false;
+
+  // Pre-fetch & decode audio buffer on http/https so Web Audio handles playback & volume natively on iOS
+  if (window.location.protocol.startsWith('http')) {
+    fetch('audio/Alabama.mp3')
+      .then((r) => r.arrayBuffer())
+      .then((buf) => {
+        sfx.init();
+        if (sfx.ctx) {
+          return sfx.ctx.decodeAudioData(buf);
+        }
+        return null;
+      })
+      .then((decoded) => {
+        if (decoded) {
+          musicBuffer = decoded;
+          if (musicIsPlaying && soundEnabled) {
+            // Switch smoothly to buffer playback if already started
+            bgMusic.pause();
+            startBufferMusic();
+          }
+        }
+      })
+      .catch(() => {});
+  }
+
+  function startBufferMusic() {
+    if (!sfx.ctx || !musicBuffer) return;
+    stopBufferMusic(false);
+    musicGainNode = sfx.ctx.createGain();
+    musicGainNode.gain.setValueAtTime(MUSIC_GAIN_LEVEL, sfx.ctx.currentTime);
+    musicGainNode.connect(sfx.ctx.destination);
+
+    musicSourceNode = sfx.ctx.createBufferSource();
+    musicSourceNode.buffer = musicBuffer;
+    musicSourceNode.loop = true;
+    musicSourceNode.connect(musicGainNode);
+
+    const offset = musicPauseOffset % musicBuffer.duration;
+    musicStartTime = sfx.ctx.currentTime - offset;
+    musicSourceNode.start(0, offset);
+  }
+
+  function stopBufferMusic(saveOffset = true) {
+    if (musicSourceNode) {
+      if (saveOffset && sfx.ctx && musicBuffer) {
+        musicPauseOffset = (sfx.ctx.currentTime - musicStartTime) % musicBuffer.duration;
       }
+      try {
+        musicSourceNode.stop();
+        musicSourceNode.disconnect();
+      } catch (_) {}
+      musicSourceNode = null;
+    }
+  }
+
+  function playMusic(restartIfStopped = false) {
+    if (!soundEnabled || document.hidden) return;
+    sfx.init();
+    if (restartIfStopped) {
+      musicPauseOffset = 0;
+      try {
+        bgMusic.currentTime = 0;
+      } catch (_) {}
+    }
+    musicIsPlaying = true;
+
+    if (musicBuffer && sfx.ctx) {
+      bgMusic.pause();
+      startBufferMusic();
+      return;
+    }
+
+    // Fallback to HTMLAudioElement routed through Web Audio GainNode when possible
+    try {
+      if (sfx.ctx && !mediaElementConnected && window.location.protocol.startsWith('http')) {
+        const src = sfx.ctx.createMediaElementSource(bgMusic);
+        const gain = sfx.ctx.createGain();
+        gain.gain.value = MUSIC_GAIN_LEVEL;
+        src.connect(gain);
+        gain.connect(sfx.ctx.destination);
+        mediaElementConnected = true;
+      }
+      bgMusic.volume = MUSIC_GAIN_LEVEL;
       const p = bgMusic.play();
       if (p && typeof p.catch === 'function') {
         p.catch(() => {});
@@ -303,6 +390,8 @@
   }
 
   function pauseMusic() {
+    musicIsPlaying = false;
+    stopBufferMusic(true);
     try {
       bgMusic.pause();
     } catch (_) {}
@@ -608,6 +697,7 @@
   function triggerGameOver() {
     if (state === 'GAMEOVER') return;
     clearCountdown();
+    pauseMusic();
     state = 'GAMEOVER';
     updateHudButtons();
     screenShake = 14;
@@ -1257,6 +1347,34 @@
       shareFeedback.textContent = '✅ Score copied to clipboard!';
     } catch (_) {
       shareFeedback.textContent = shareText;
+    }
+  });
+
+  // Stop music & auto-pause immediately when leaving Safari / switching tabs / locking phone
+  function handleAppBackgrounded() {
+    pauseMusic();
+    if (sfx.ctx && sfx.ctx.state === 'running') {
+      try {
+        sfx.ctx.suspend();
+      } catch (_) {}
+    }
+    if (state === 'PLAYING' || state === 'GET_READY' || state === 'COUNTDOWN') {
+      pauseGame();
+    }
+  }
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+      handleAppBackgrounded();
+    }
+  });
+
+  window.addEventListener('pagehide', handleAppBackgrounded);
+  window.addEventListener('blur', () => {
+    if (state === 'PLAYING' || state === 'GET_READY' || state === 'COUNTDOWN') {
+      handleAppBackgrounded();
+    } else {
+      pauseMusic();
     }
   });
 
