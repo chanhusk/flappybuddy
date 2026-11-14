@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#0f172a" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Flappy Ryan" />
+  <meta name="description" content="Flappy Ryan — A modern, mobile-friendly Flappy Bird arcade game starring Ryan!" />
+  <meta property="og:title" content="Flappy Ryan" />
+  <meta property="og:description" content="Can you beat the high score in Flappy Ryan? Play on mobile or desktop!" />
+  <meta property="og:image" content="assets/icon-192.png" />
+  <title>Flappy Ryan</title>
+  <link rel="icon" type="image/png" href="assets/icon-192.png" />
+  <link rel="apple-touch-icon" href="assets/icon-192.png" />
+  <link rel="manifest" href="manifest.json" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@600;700&family=Plus+Jakarta+Sans:wght@500;700;800&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <div class="game-wrapper" id="gameWrapper">
+      <canvas id="gameCanvas" aria-label="Flappy Ryan Game Canvas"></canvas>
+
+      <!-- Top HUD -->
+      <header class="hud-top">
+        <div class="hud-pill best-pill" title="Best Score">
+          <span class="trophy-icon">🏆</span>
+          <span class="hud-label">BEST</span>
+          <span class="hud-value" id="hudBest">0</span>
+        </div>
+
+        <div class="hud-actions">
+          <button class="icon-btn" id="styleToggleBtn" type="button" aria-label="Switch Ryan Avatar Style" title="Switch Avatar Style (Cutout / Badge)">
+            🧢
+          </button>
+          <button class="icon-btn" id="themeToggleBtn" type="button" aria-label="Change Sky Theme" title="Cycle Sky Theme">
+            🌤️
+          </button>
+          <button class="icon-btn" id="soundToggleBtn" type="button" aria-label="Toggle Sound" title="Toggle Sound">
+            🔊
+          </button>
+        </div>
+      </header>
+
+      <!-- Live Score Display -->
+      <div class="live-score-container" id="liveScoreContainer">
+        <div class="live-score" id="liveScore">0</div>
+        <div class="combo-Popup" id="milestoneToast"></div>
+      </div>
+
+      <!-- Start Screen Overlay -->
+      <section class="overlay active" id="startOverlay">
+        <div class="glass-card start-card">
+          <div class="badge-tag">MODERN ARCADE EDITION</div>
+          <div class="hero-preview">
+            <div class="hero-glow"></div>
+            <img src="assets/ryan-cutout.png" alt="Ryan" class="hero-ryan-img" id="heroRyanImg" />
+          </div>
+          <h1 class="game-title">FLAPPY <span>RYAN</span></h1>
+          <p class="subtitle">Tap, click, or press Space to keep Ryan airborne!</p>
+
+          <div class="mode-selector" role="group" aria-label="Difficulty Mode">
+            <button type="button" class="mode-btn" data-difficulty="chill">Chill</button>
+            <button type="button" class="mode-btn active" data-difficulty="classic">Classic</button>
+            <button type="button" class="mode-btn" data-difficulty="turbo">Turbo</button>
+          </div>
+
+          <button type="button" class="primary-btn pulse-btn" id="startBtn">
+            <span>TAP TO FLY</span>
+          </button>
+
+          <div class="controls-hint">
+            <span>📱 Tap anywhere on screen</span>
+            <span class="dot">•</span>
+            <span>⌨️ Space / Up / Click</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Game Over Overlay -->
+      <section class="overlay" id="gameOverOverlay" aria-hidden="true">
+        <div class="glass-card gameover-card">
+          <div class="gameover-header">
+            <h2 class="gameover-title" id="gameOverTitle">WIPEOUT!</h2>
+            <p class="gameover-quip" id="gameOverQuip">Ryan clipped a pipe!</p>
+          </div>
+
+          <div class="scoreboard-grid">
+            <div class="medal-box">
+              <div class="medal-circle" id="medalCircle">
+                <img src="assets/ryan-cutout.png" alt="Ryan Medal" class="medal-ryan" />
+                <span class="medal-ribbon" id="medalBadge">🥉</span>
+              </div>
+              <span class="medal-name" id="medalName">ROOKIE RYAN</span>
+            </div>
+
+            <div class="scores-column">
+              <div class="score-row">
+                <span class="score-label">SCORE</span>
+                <span class="score-number" id="finalScore">0</span>
+              </div>
+              <div class="score-divider"></div>
+              <div class="score-row">
+                <span class="score-label">
+                  BEST
+                  <span class="new-record-badge hidden" id="newRecordBadge">NEW!</span>
+                </span>
+                <span class="score-number best-number" id="finalBest">0</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="gameover-buttons">
+            <button type="button" class="primary-btn" id="retryBtn">
+              <span>PLAY AGAIN</span>
+            </button>
+            <button type="button" class="secondary-btn" id="shareBtn">
+              <span>📤 SHARE SCORE</span>
+            </button>
+          </div>
+          <div class="share-feedback" id="shareFeedback"></div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <script src="game.js"></script>
+</body>
+</html>

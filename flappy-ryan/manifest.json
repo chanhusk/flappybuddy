@@ -1,0 +1,17 @@
+{
+  "name": "Flappy Ryan",
+  "short_name": "Flappy Ryan",
+  "description": "A modern, mobile-friendly Flappy Bird arcade game starring Ryan!",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0f172a",
+  "theme_color": "#0f172a",
+  "icons": [
+    {
+      "src": "assets/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    }
+  ]
+}
