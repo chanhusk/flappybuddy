@@ -41,7 +41,7 @@
     ryanFullImg.src = 'assets/ryan.png';
   };
 
-  // Persistent Settings & High Score
+  // Persistent Settings & High Score (safe for private browsing / in-app webviews)
   const STORAGE_KEYS = {
     best: 'flappy_ryan_best_v1',
     sound: 'flappy_ryan_sound_v1',
@@ -49,13 +49,25 @@
     theme: 'flappy_ryan_theme_v1',
   };
 
-  let bestScore = parseInt(localStorage.getItem(STORAGE_KEYS.best) || '0', 10) || 0;
-  let soundEnabled = localStorage.getItem(STORAGE_KEYS.sound) !== 'false';
-  let avatarStyle = localStorage.getItem(STORAGE_KEYS.style) || 'cutout'; // 'cutout' | 'badge'
-  let currentThemeIndex = parseInt(localStorage.getItem(STORAGE_KEYS.theme) || '0', 10) || 0;
+  function safeGet(key, fallback) {
+    try {
+      const val = localStorage.getItem(key);
+      return val !== null ? val : fallback;
+    } catch (_) {
+      return fallback;
+    }
+  }
 
-  hudBest.textContent = bestScore;
-  updateHudButtons();
+  function safeSet(key, val) {
+    try {
+      localStorage.setItem(key, String(val));
+    } catch (_) {}
+  }
+
+  let bestScore = parseInt(safeGet(STORAGE_KEYS.best, '0'), 10) || 0;
+  let soundEnabled = safeGet(STORAGE_KEYS.sound, 'true') !== 'false';
+  let avatarStyle = safeGet(STORAGE_KEYS.style, 'cutout'); // 'cutout' | 'badge'
+  let currentThemeIndex = parseInt(safeGet(STORAGE_KEYS.theme, '0'), 10) || 0;
 
   // Sky / Environment Themes
   const THEMES = [
@@ -469,7 +481,7 @@
     const isNewBest = score > bestScore;
     if (isNewBest) {
       bestScore = score;
-      localStorage.setItem(STORAGE_KEYS.best, String(bestScore));
+      safeSet(STORAGE_KEYS.best, bestScore);
       hudBest.textContent = bestScore;
     }
 
@@ -758,6 +770,22 @@
     ctx.fill();
   }
 
+  function drawRoundedRect(x, y, w, h, r) {
+    if (typeof ctx.roundRect === 'function') {
+      ctx.beginPath();
+      ctx.roundRect(x, y, w, h, r);
+      return;
+    }
+    const rad = Math.min(r, w / 2, h / 2);
+    ctx.beginPath();
+    ctx.moveTo(x + rad, y);
+    ctx.arcTo(x + w, y, x + w, y + h, rad);
+    ctx.arcTo(x + w, y + h, x, y + h, rad);
+    ctx.arcTo(x, y + h, x, y, rad);
+    ctx.arcTo(x, y, x + w, y, rad);
+    ctx.closePath();
+  }
+
   function drawPipes(theme) {
     const playAreaHeight = height - groundHeight;
     const capHeight = 26;
@@ -783,8 +811,7 @@
         // Top Pipe Cap
         const capY = p.topHeight - capHeight;
         ctx.fillStyle = pipeGrad;
-        ctx.beginPath();
-        ctx.roundRect(p.x - capOverhang, capY, p.width + capOverhang * 2, capHeight, 7);
+        drawRoundedRect(p.x - capOverhang, capY, p.width + capOverhang * 2, capHeight, 7);
         ctx.fill();
         ctx.stroke();
 
@@ -802,8 +829,7 @@
 
         // Bottom Pipe Cap
         ctx.fillStyle = pipeGrad;
-        ctx.beginPath();
-        ctx.roundRect(p.x - capOverhang, p.bottomY, p.width + capOverhang * 2, capHeight, 7);
+        drawRoundedRect(p.x - capOverhang, p.bottomY, p.width + capOverhang * 2, capHeight, 7);
         ctx.fill();
         ctx.stroke();
 
@@ -1065,7 +1091,7 @@
   soundToggleBtn.addEventListener('click', (e) => {
     e.stopPropagation();
     soundEnabled = !soundEnabled;
-    localStorage.setItem(STORAGE_KEYS.sound, String(soundEnabled));
+    safeSet(STORAGE_KEYS.sound, soundEnabled);
     updateHudButtons();
     if (soundEnabled) sfx.flap();
   });
@@ -1073,7 +1099,7 @@
   themeToggleBtn.addEventListener('click', (e) => {
     e.stopPropagation();
     currentThemeIndex = (currentThemeIndex + 1) % THEMES.length;
-    localStorage.setItem(STORAGE_KEYS.theme, String(currentThemeIndex));
+    safeSet(STORAGE_KEYS.theme, currentThemeIndex);
     updateHudButtons();
     showMilestoneToast(`${THEMES[currentThemeIndex].icon} ${THEMES[currentThemeIndex].name}`);
   });
@@ -1081,7 +1107,7 @@
   styleToggleBtn.addEventListener('click', (e) => {
     e.stopPropagation();
     avatarStyle = avatarStyle === 'cutout' ? 'badge' : 'cutout';
-    localStorage.setItem(STORAGE_KEYS.style, avatarStyle);
+    safeSet(STORAGE_KEYS.style, avatarStyle);
     updateHudButtons();
     showMilestoneToast(avatarStyle === 'cutout' ? '🧢 Cutout Ryan Mode' : '🪙 Badge Ryan Mode');
   });
@@ -1113,6 +1139,8 @@
   });
 
   // Initialize & Kickoff
+  hudBest.textContent = bestScore;
+  updateHudButtons();
   resizeCanvas();
   requestAnimationFrame((t) => {
     lastTime = t;
