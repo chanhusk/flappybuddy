@@ -25,7 +25,7 @@
     <div class="game-wrapper" id="gameWrapper">
       <canvas id="gameCanvas" aria-label="Flappy Ryan Game Canvas"></canvas>
 
-      <!-- Top HUD -->
+      <!-- Top HUD (Always accessible above overlays) -->
       <header class="hud-top">
         <div class="hud-pill best-pill" title="Best Score">
           <span class="trophy-icon">🏆</span>
@@ -34,11 +34,14 @@
         </div>
 
         <div class="hud-actions">
-          <button class="icon-btn" id="styleToggleBtn" type="button" aria-label="Switch Ryan Avatar Style" title="Switch Avatar Style (Cutout / Badge)">
+          <button class="icon-btn" id="pauseBtn" type="button" aria-label="Pause or Settings" title="Pause / Settings (P or Esc)">
+            ⏸️
+          </button>
+          <button class="icon-btn" id="styleToggleBtn" type="button" aria-label="Switch Ryan Avatar Style" title="Switch Ryan Style">
             🧢
           </button>
-          <button class="icon-btn" id="themeToggleBtn" type="button" aria-label="Change Sky Theme" title="Cycle Sky Theme">
-            🌤️
+          <button class="icon-btn" id="themeToggleBtn" type="button" aria-label="Change Sky Theme" title="Change Background Theme">
+            🌅
           </button>
           <button class="icon-btn" id="soundToggleBtn" type="button" aria-label="Toggle Sound" title="Toggle Sound">
             🔊
@@ -52,6 +55,12 @@
         <div class="combo-Popup" id="milestoneToast"></div>
       </div>
 
+      <!-- 3-Second Resume Countdown Overlay -->
+      <div class="countdown-overlay" id="countdownOverlay" aria-hidden="true">
+        <div class="countdown-number" id="countdownNumber">3</div>
+        <div class="countdown-sub">GET READY TO FLY!</div>
+      </div>
+
       <!-- Start Screen Overlay -->
       <section class="overlay active" id="startOverlay">
         <div class="glass-card start-card">
@@ -63,10 +72,18 @@
           <h1 class="game-title">FLAPPY <span>RYAN</span></h1>
           <p class="subtitle">Tap, click, or press Space to keep Ryan airborne!</p>
 
+          <div class="settings-section-label">DIFFICULTY</div>
           <div class="mode-selector" role="group" aria-label="Difficulty Mode">
             <button type="button" class="mode-btn" data-difficulty="chill">Chill</button>
             <button type="button" class="mode-btn active" data-difficulty="classic">Classic</button>
             <button type="button" class="mode-btn" data-difficulty="turbo">Turbo</button>
+          </div>
+
+          <div class="settings-section-label">BACKGROUND THEME</div>
+          <div class="theme-selector" role="group" aria-label="Background Theme">
+            <button type="button" class="theme-btn active" data-theme="0">🌅 Sunset</button>
+            <button type="button" class="theme-btn" data-theme="1">🌤️ Day</button>
+            <button type="button" class="theme-btn" data-theme="2">🌃 Night</button>
           </div>
 
           <button type="button" class="primary-btn pulse-btn" id="startBtn">
@@ -74,9 +91,48 @@
           </button>
 
           <div class="controls-hint">
-            <span>📱 Tap anywhere on screen</span>
+            <span>📱 Tap anywhere</span>
             <span class="dot">•</span>
-            <span>⌨️ Space / Up / Click</span>
+            <span>⌨️ Space / Click</span>
+            <span class="dot">•</span>
+            <span>⏸️ Pause anytime</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Pause / Settings Overlay -->
+      <section class="overlay" id="pauseOverlay" aria-hidden="true">
+        <div class="glass-card pause-card">
+          <h2 class="gameover-title">GAME PAUSED</h2>
+          <p class="subtitle" style="margin-bottom: 14px;">Customize your settings before jumping back in</p>
+
+          <div class="settings-section-label">BACKGROUND THEME</div>
+          <div class="theme-selector" role="group" aria-label="Background Theme">
+            <button type="button" class="theme-btn active" data-theme="0">🌅 Sunset</button>
+            <button type="button" class="theme-btn" data-theme="1">🌤️ Day</button>
+            <button type="button" class="theme-btn" data-theme="2">🌃 Night</button>
+          </div>
+
+          <div class="settings-section-label">RYAN STYLE</div>
+          <div class="style-selector" role="group" aria-label="Ryan Avatar Style">
+            <button type="button" class="style-btn active" data-style="cutout">🧢 Cutout Head</button>
+            <button type="button" class="style-btn" data-style="badge">🖼️ Framed Photo</button>
+          </div>
+
+          <div class="settings-section-label">DIFFICULTY</div>
+          <div class="mode-selector" role="group" aria-label="Difficulty Mode">
+            <button type="button" class="mode-btn" data-difficulty="chill">Chill</button>
+            <button type="button" class="mode-btn active" data-difficulty="classic">Classic</button>
+            <button type="button" class="mode-btn" data-difficulty="turbo">Turbo</button>
+          </div>
+
+          <div class="gameover-buttons" style="margin-top: 8px;">
+            <button type="button" class="primary-btn" id="resumeBtn">
+              <span>▶️ RESUME (3s COUNTDOWN)</span>
+            </button>
+            <button type="button" class="secondary-btn" id="restartFromPauseBtn">
+              <span>🔄 RESTART GAME</span>
+            </button>
           </div>
         </div>
       </section>

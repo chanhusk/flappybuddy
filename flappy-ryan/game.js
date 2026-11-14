@@ -12,8 +12,15 @@
   const liveScoreEl = document.getElementById('liveScore');
   const milestoneToast = document.getElementById('milestoneToast');
   const startOverlay = document.getElementById('startOverlay');
+  const pauseOverlay = document.getElementById('pauseOverlay');
   const gameOverOverlay = document.getElementById('gameOverOverlay');
+  const countdownOverlay = document.getElementById('countdownOverlay');
+  const countdownNumber = document.getElementById('countdownNumber');
+
   const startBtn = document.getElementById('startBtn');
+  const pauseBtn = document.getElementById('pauseBtn');
+  const resumeBtn = document.getElementById('resumeBtn');
+  const restartFromPauseBtn = document.getElementById('restartFromPauseBtn');
   const retryBtn = document.getElementById('retryBtn');
   const shareBtn = document.getElementById('shareBtn');
   const shareFeedback = document.getElementById('shareFeedback');
@@ -29,7 +36,10 @@
   const medalName = document.getElementById('medalName');
   const gameOverTitle = document.getElementById('gameOverTitle');
   const gameOverQuip = document.getElementById('gameOverQuip');
+
   const modeButtons = document.querySelectorAll('.mode-btn');
+  const themeButtons = document.querySelectorAll('.theme-btn');
+  const styleButtons = document.querySelectorAll('.style-btn');
 
   // Load Ryan's images
   const ryanCutoutImg = new Image();
@@ -205,6 +215,26 @@
       osc.stop(now + 0.1);
     }
 
+    tick(isGo = false) {
+      if (!soundEnabled) return;
+      this.init();
+      if (!this.ctx) return;
+
+      const now = this.ctx.currentTime;
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(isGo ? 880 : 440, now);
+
+      gain.gain.setValueAtTime(0.16, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.14);
+
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+      osc.start(now);
+      osc.stop(now + 0.15);
+    }
+
     score(isMilestone = false) {
       if (!soundEnabled) return;
       this.init();
@@ -253,8 +283,8 @@
 
   const sfx = new SoundFX();
 
-  // Game State
-  let state = 'START'; // 'START' | 'GET_READY' | 'PLAYING' | 'GAMEOVER'
+  // Game State: 'START' | 'GET_READY' | 'PLAYING' | 'PAUSED' | 'COUNTDOWN' | 'GAMEOVER'
+  let state = 'START';
   let width = 420;
   let height = 740;
   let dpr = 1;
@@ -266,6 +296,7 @@
   let screenShake = 0;
   let flashAlpha = 0;
   let lastTime = performance.now();
+  let countdownInterval = null;
 
   // Ryan Bird Entity
   const bird = {
@@ -367,12 +398,89 @@
     soundToggleBtn.textContent = soundEnabled ? '🔊' : '🔇';
     soundToggleBtn.style.opacity = soundEnabled ? '1' : '0.65';
     themeToggleBtn.textContent = THEMES[currentThemeIndex].icon;
-    styleToggleBtn.textContent = avatarStyle === 'cutout' ? '🧢' : '🪙';
+    styleToggleBtn.textContent = avatarStyle === 'cutout' ? '🧢' : '🖼️';
+    pauseBtn.textContent = state === 'PAUSED' ? '▶️' : '⏸️';
+
     if (heroRyanImg) {
       heroRyanImg.src = avatarStyle === 'cutout' ? 'assets/ryan-cutout.png' : 'assets/ryan-hires.png';
       heroRyanImg.style.borderRadius = avatarStyle === 'cutout' ? '0' : '50%';
       heroRyanImg.style.border = avatarStyle === 'cutout' ? 'none' : '3px solid #fbbf24';
     }
+
+    // Sync active state on all theme buttons
+    themeButtons.forEach((btn) => {
+      const idx = parseInt(btn.dataset.theme || '0', 10);
+      btn.classList.toggle('active', idx === currentThemeIndex);
+    });
+
+    // Sync active state on all style buttons
+    styleButtons.forEach((btn) => {
+      btn.classList.toggle('active', btn.dataset.style === avatarStyle);
+    });
+
+    // Sync active state on all difficulty buttons
+    modeButtons.forEach((btn) => {
+      btn.classList.toggle('active', btn.dataset.difficulty === currentDifficulty);
+    });
+  }
+
+  function clearCountdown() {
+    if (countdownInterval) {
+      clearInterval(countdownInterval);
+      countdownInterval = null;
+    }
+    countdownOverlay.classList.remove('active');
+    countdownOverlay.setAttribute('aria-hidden', 'true');
+  }
+
+  function pauseGame() {
+    if (state === 'PLAYING' || state === 'GET_READY' || state === 'COUNTDOWN') {
+      clearCountdown();
+      state = 'PAUSED';
+      pauseOverlay.classList.add('active');
+      pauseOverlay.setAttribute('aria-hidden', 'false');
+      updateHudButtons();
+    } else if (state === 'START') {
+      // Allow opening settings/pause menu from start screen too if user taps pause button
+      state = 'PAUSED';
+      startOverlay.classList.remove('active');
+      pauseOverlay.classList.add('active');
+      pauseOverlay.setAttribute('aria-hidden', 'false');
+      updateHudButtons();
+    }
+  }
+
+  function startResumeCountdown() {
+    if (state !== 'PAUSED') return;
+    pauseOverlay.classList.remove('active');
+    pauseOverlay.setAttribute('aria-hidden', 'true');
+    liveScoreContainer.classList.add('visible');
+
+    state = 'COUNTDOWN';
+    updateHudButtons();
+
+    let remaining = 3;
+    countdownNumber.textContent = String(remaining);
+    countdownOverlay.classList.add('active');
+    countdownOverlay.setAttribute('aria-hidden', 'false');
+    sfx.tick(false);
+
+    clearInterval(countdownInterval);
+    countdownInterval = setInterval(() => {
+      remaining -= 1;
+      if (remaining > 0) {
+        countdownNumber.textContent = String(remaining);
+        sfx.tick(false);
+      } else {
+        clearCountdown();
+        sfx.tick(true);
+        state = 'PLAYING';
+        // Give Ryan a gentle upward float on resume so the player isn't immediately dropping fast
+        bird.vy = Math.min(bird.vy, -3.5);
+        lastTime = performance.now();
+        updateHudButtons();
+      }
+    }, 1000);
   }
 
   function spawnFlapParticles() {
@@ -380,7 +488,7 @@
       const angle = Math.PI * 0.65 + (Math.random() - 0.5) * 0.9;
       const speed = 1.6 + Math.random() * 2.6;
       particles.push({
-        x: bird.x - 12,
+        x: bird.x - 16,
         y: bird.y + 6,
         vx: Math.cos(angle) * speed - 1.2,
         vy: Math.sin(angle) * speed,
@@ -417,6 +525,7 @@
   }
 
   function resetGame() {
+    clearCountdown();
     score = 0;
     liveScoreEl.textContent = '0';
     pipes = [];
@@ -438,10 +547,13 @@
     resetGame();
     state = 'GET_READY';
     startOverlay.classList.remove('active');
+    pauseOverlay.classList.remove('active');
+    pauseOverlay.setAttribute('aria-hidden', 'true');
     gameOverOverlay.classList.remove('active');
     gameOverOverlay.setAttribute('aria-hidden', 'true');
     liveScoreContainer.classList.add('visible');
     shareFeedback.textContent = '';
+    updateHudButtons();
     flap();
   }
 
@@ -453,12 +565,13 @@
     }
     if (state === 'GET_READY') {
       state = 'PLAYING';
+      updateHudButtons();
     }
     if (state !== 'PLAYING') return;
 
     bird.vy = cfg.jumpVelocity;
-    bird.scaleX = 1.16;
-    bird.scaleY = 0.86;
+    bird.scaleX = 1.14;
+    bird.scaleY = 0.88;
     bird.wingSpeed = 0.55;
     spawnFlapParticles();
     sfx.flap();
@@ -466,7 +579,9 @@
 
   function triggerGameOver() {
     if (state === 'GAMEOVER') return;
+    clearCountdown();
     state = 'GAMEOVER';
+    updateHudButtons();
     screenShake = 14;
     flashAlpha = 0.65;
     spawnCrashParticles();
@@ -524,7 +639,6 @@
   function spawnPipe() {
     const cfg = DIFFICULTIES[currentDifficulty];
     const playAreaHeight = height - groundHeight;
-    // Slight dynamic narrowing as score climbs (capped so it stays fair)
     const dynamicGap = Math.max(cfg.pipeGap - Math.min(score * 0.45, 18), 124);
     const minTop = 68;
     const maxTop = Math.max(minTop + 40, playAreaHeight - dynamicGap - 90);
@@ -541,12 +655,16 @@
   }
 
   function update(dt) {
-    // dt is normalized where 1.0 = 1/60th second
+    // Freeze world physics while paused or during the 3-second countdown
+    if (state === 'PAUSED' || state === 'COUNTDOWN') {
+      bird.wingAngle += 0.12 * dt;
+      return;
+    }
+
     frameTimer += dt;
     const cfg = DIFFICULTIES[currentDifficulty];
     const playAreaHeight = height - groundHeight;
 
-    // Decay screen shake & flash
     if (screenShake > 0) {
       screenShake = Math.max(0, screenShake - dt * 0.9);
     }
@@ -554,11 +672,9 @@
       flashAlpha = Math.max(0, flashAlpha - dt * 0.05);
     }
 
-    // Smoothly return squash/stretch to 1
     bird.scaleX += (1 - bird.scaleX) * 0.18 * dt;
     bird.scaleY += (1 - bird.scaleY) * 0.18 * dt;
 
-    // Clouds & Ground scroll
     if (state !== 'GAMEOVER') {
       const speedMult = state === 'PLAYING' ? cfg.pipeSpeed : 1.4;
       groundOffset = (groundOffset + speedMult * dt) % 36;
@@ -587,35 +703,29 @@
       bird.rotation = Math.sin(frameTimer * 0.06) * 0.08;
       bird.wingAngle += 0.18 * dt;
     } else if (state === 'PLAYING') {
-      // Bird physics
       bird.vy = Math.min(cfg.maxFallSpeed, bird.vy + cfg.gravity * dt);
       bird.y += bird.vy * dt;
 
-      // Wing flap speed
       bird.wingSpeed = Math.max(0.18, bird.wingSpeed * 0.96);
       bird.wingAngle += bird.wingSpeed * dt;
 
-      // Pitch angle based on velocity
       if (bird.vy < 0) {
-        bird.rotation += (-0.36 - bird.rotation) * 0.28 * dt;
+        bird.rotation += (-0.32 - bird.rotation) * 0.28 * dt;
       } else {
         const targetRot = Math.min(Math.PI * 0.42, (bird.vy / cfg.maxFallSpeed) * 1.15);
         bird.rotation += (targetRot - bird.rotation) * 0.14 * dt;
       }
 
-      // Ceiling clamp
       if (bird.y - bird.radius < 8) {
         bird.y = bird.radius + 8;
         bird.vy = 0;
       }
 
-      // Ground collision
       if (bird.y + bird.radius >= playAreaHeight) {
         bird.y = playAreaHeight - bird.radius;
         triggerGameOver();
       }
 
-      // Pipe spawning & movement
       pipeSpawnTimer += dt;
       if (pipeSpawnTimer >= cfg.pipeInterval) {
         pipeSpawnTimer = 0;
@@ -626,7 +736,6 @@
         const p = pipes[i];
         p.x -= cfg.pipeSpeed * dt;
 
-        // Score check
         if (!p.passed && p.x + p.width < bird.x) {
           p.passed = true;
           score += 1;
@@ -653,7 +762,6 @@
           }
         }
 
-        // Forgiving hitbox circle check so gameplay feels fair and fun
         const hitRadius = bird.radius * 0.82;
         if (bird.x + hitRadius > p.x + 4 && bird.x - hitRadius < p.x + p.width - 4) {
           if (bird.y - hitRadius < p.topHeight || bird.y + hitRadius > p.bottomY) {
@@ -674,7 +782,6 @@
       }
     }
 
-    // Update particles
     for (let i = particles.length - 1; i >= 0; i--) {
       const pt = particles[i];
       pt.x += pt.vx * dt;
@@ -686,7 +793,6 @@
       }
     }
 
-    // Update floating score popups
     for (let i = floatingTexts.length - 1; i >= 0; i--) {
       const ft = floatingTexts[i];
       ft.y += ft.vy * dt;
@@ -700,7 +806,6 @@
   function drawBackground(theme) {
     const playAreaHeight = height - groundHeight;
 
-    // Sky Gradient
     const skyGrad = ctx.createLinearGradient(0, 0, 0, playAreaHeight);
     skyGrad.addColorStop(0, theme.skyTop);
     skyGrad.addColorStop(0.58, theme.skyMid);
@@ -708,7 +813,6 @@
     ctx.fillStyle = skyGrad;
     ctx.fillRect(0, 0, width, playAreaHeight);
 
-    // Twinkling stars
     ctx.save();
     for (const s of stars) {
       const twinkle = 0.35 + 0.65 * Math.sin(frameTimer * 0.04 + s.phase);
@@ -719,7 +823,6 @@
     }
     ctx.restore();
 
-    // Sun / Moon Orb
     const sunX = width * 0.74;
     const sunY = playAreaHeight * 0.26;
     const glowGrad = ctx.createRadialGradient(sunX, sunY, 10, sunX, sunY, 95);
@@ -735,7 +838,6 @@
     ctx.arc(sunX, sunY, 32, 0, Math.PI * 2);
     ctx.fill();
 
-    // Soft Volumetric Clouds
     ctx.fillStyle = theme.cloudColor;
     for (const c of clouds) {
       ctx.save();
@@ -749,7 +851,6 @@
       ctx.restore();
     }
 
-    // Distant Skyline Silhouette
     ctx.fillStyle = theme.cityColor;
     for (const b of buildings) {
       if (b.x > width + 40) continue;
@@ -757,7 +858,6 @@
       ctx.fillRect(b.x, by, b.w, b.h + 24);
     }
 
-    // Rolling Parallax Hills
     ctx.fillStyle = theme.farHill;
     ctx.beginPath();
     ctx.moveTo(0, playAreaHeight);
@@ -792,7 +892,6 @@
     const capOverhang = 5;
 
     for (const p of pipes) {
-      // Pipe Metallic 3D Gradient
       const pipeGrad = ctx.createLinearGradient(p.x, 0, p.x + p.width, 0);
       pipeGrad.addColorStop(0, theme.pipeBodyA);
       pipeGrad.addColorStop(0.28, theme.pipeBodyB);
@@ -802,38 +901,32 @@
       ctx.lineWidth = 2.5;
       ctx.strokeStyle = theme.pipeBorder;
 
-      // Top Pipe Column
       if (p.topHeight > 0) {
         ctx.fillStyle = pipeGrad;
         ctx.fillRect(p.x, -2, p.width, p.topHeight);
         ctx.strokeRect(p.x, -2, p.width, p.topHeight);
 
-        // Top Pipe Cap
         const capY = p.topHeight - capHeight;
         ctx.fillStyle = pipeGrad;
         drawRoundedRect(p.x - capOverhang, capY, p.width + capOverhang * 2, capHeight, 7);
         ctx.fill();
         ctx.stroke();
 
-        // Specular highlight strip
         ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
         ctx.fillRect(p.x + 9, 0, 6, Math.max(0, capY - 2));
       }
 
-      // Bottom Pipe Column
       const bottomHeight = playAreaHeight - p.bottomY;
       if (bottomHeight > 0) {
         ctx.fillStyle = pipeGrad;
         ctx.fillRect(p.x, p.bottomY, p.width, bottomHeight + 2);
         ctx.strokeRect(p.x, p.bottomY, p.width, bottomHeight + 2);
 
-        // Bottom Pipe Cap
         ctx.fillStyle = pipeGrad;
         drawRoundedRect(p.x - capOverhang, p.bottomY, p.width + capOverhang * 2, capHeight, 7);
         ctx.fill();
         ctx.stroke();
 
-        // Specular highlight strip
         ctx.fillStyle = 'rgba(255, 255, 255, 0.25)';
         ctx.fillRect(p.x + 9, p.bottomY + capHeight + 2, 6, Math.max(0, bottomHeight - capHeight - 4));
       }
@@ -843,15 +936,12 @@
   function drawGround(theme) {
     const playAreaHeight = height - groundHeight;
 
-    // Deep Base
     ctx.fillStyle = theme.groundDirt;
     ctx.fillRect(0, playAreaHeight, width, groundHeight);
 
-    // Top Turf Strip
     ctx.fillStyle = theme.groundTop;
     ctx.fillRect(0, playAreaHeight, width, 18);
 
-    // Animated Diagonal Speed Chevrons
     ctx.save();
     ctx.beginPath();
     ctx.rect(0, playAreaHeight + 3, width, 12);
@@ -868,7 +958,6 @@
     }
     ctx.restore();
 
-    // Crisp Horizon Divider Line
     ctx.fillStyle = 'rgba(255, 255, 255, 0.28)';
     ctx.fillRect(0, playAreaHeight, width, 2);
   }
@@ -879,103 +968,54 @@
     ctx.rotate(bird.rotation);
     ctx.scale(bird.scaleX, bird.scaleY);
 
-    // Golden streak aura when scoring 10+
-    if (score >= 10 && state === 'PLAYING') {
-      const auraGrad = ctx.createRadialGradient(0, 0, 14, 0, 0, 38);
-      auraGrad.addColorStop(0, 'rgba(251, 191, 36, 0.45)');
-      auraGrad.addColorStop(1, 'rgba(251, 191, 36, 0)');
-      ctx.fillStyle = auraGrad;
-      ctx.beginPath();
-      ctx.arc(0, 0, 38, 0, Math.PI * 2);
-      ctx.fill();
-    }
-
-    // Little tail feathers behind Ryan
-    const tailWag = Math.sin(bird.wingAngle) * 0.18;
+    // 1. Small animated wing tucked BEHIND Ryan on the left side (never covers his face!)
+    const wingFlapY = Math.sin(bird.wingAngle) * 5;
+    const wingRot = Math.sin(bird.wingAngle) * 0.45;
     ctx.save();
-    ctx.translate(-22, 6);
-    ctx.rotate(tailWag);
-    ctx.fillStyle = '#f59e0b';
+    ctx.translate(-22, 4 + wingFlapY * 0.25);
+    ctx.rotate(wingRot);
+    ctx.fillStyle = '#f8fafc';
+    ctx.strokeStyle = '#475569';
+    ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.moveTo(4, 0);
-    ctx.lineTo(-13, -7);
-    ctx.lineTo(-9, 1);
-    ctx.lineTo(-14, 8);
-    ctx.closePath();
+    ctx.ellipse(0, 0, 12, 6.5, -0.3, 0, Math.PI * 2);
     ctx.fill();
+    ctx.stroke();
     ctx.restore();
 
+    // 2. Draw Ryan's Face ON TOP completely unobstructed
     if (avatarStyle === 'cutout' && ryanCutoutImg.complete && ryanCutoutImg.naturalWidth > 0) {
-      // Feathered Bird Torso underneath Ryan's cutout head
-      const bodyGrad = ctx.createLinearGradient(0, 2, 0, 26);
-      bodyGrad.addColorStop(0, '#fbbf24');
-      bodyGrad.addColorStop(1, '#d97706');
-      ctx.fillStyle = bodyGrad;
-      ctx.strokeStyle = '#78350f';
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.ellipse(-3, 14, 18, 12, -0.1, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.stroke();
-
-      // Draw Ryan's Cutout Head & Cap
-      const imgW = 56;
-      const imgH = 62;
+      const imgW = 60;
+      const imgH = 66;
       ctx.save();
-      ctx.shadowColor = 'rgba(0, 0, 0, 0.38)';
+      ctx.shadowColor = 'rgba(0, 0, 0, 0.42)';
       ctx.shadowBlur = 8;
       ctx.shadowOffsetY = 3;
-      ctx.drawImage(ryanCutoutImg, -imgW / 2 + 2, -imgH / 2 - 4, imgW, imgH);
+      ctx.drawImage(ryanCutoutImg, -imgW / 2, -imgH / 2, imgW, imgH);
       ctx.restore();
-    } else {
-      // Circular Golden Badge Mode using full Ryan.png
-      const r = 24;
+    } else if (ryanFullImg.complete && ryanFullImg.naturalWidth > 0) {
+      const r = 26;
       ctx.save();
       ctx.beginPath();
       ctx.arc(0, 0, r, 0, Math.PI * 2);
       ctx.closePath();
       ctx.clip();
-
-      if (ryanFullImg.complete && ryanFullImg.naturalWidth > 0) {
-        ctx.drawImage(ryanFullImg, -r, -r - 2, r * 2, r * 2.2);
-      } else {
-        ctx.fillStyle = '#fbbf24';
-        ctx.fillRect(-r, -r, r * 2, r * 2);
-      }
+      ctx.drawImage(ryanFullImg, -r, -r - 2, r * 2, r * 2.2);
       ctx.restore();
 
-      // Golden rim
-      ctx.strokeStyle = '#fbbf24';
-      ctx.lineWidth = 3;
+      ctx.strokeStyle = '#38bdf8';
+      ctx.lineWidth = 2.5;
       ctx.beginPath();
       ctx.arc(0, 0, r, 0, Math.PI * 2);
       ctx.stroke();
     }
 
-    // Animated Flapping Wing on the side
-    const wingFlapY = Math.sin(bird.wingAngle) * 7;
-    const wingRot = Math.sin(bird.wingAngle) * 0.48;
-    ctx.save();
-    ctx.translate(-10, 10 + wingFlapY * 0.25);
-    ctx.rotate(wingRot);
-    const wingGrad = ctx.createLinearGradient(0, -8, 0, 10);
-    wingGrad.addColorStop(0, '#fef08a');
-    wingGrad.addColorStop(1, '#f59e0b');
-    ctx.fillStyle = wingGrad;
-    ctx.strokeStyle = '#92400e';
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.ellipse(0, 0, 13, 8, -0.25, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-    ctx.restore();
-
-    // Dizzy stars when crashed
+    // 3. Dizzy stars above cap when crashed
     if (state === 'GAMEOVER') {
       for (let i = 0; i < 3; i++) {
         const a = bird.dizzyAngle + (i * Math.PI * 2) / 3;
         const sx = Math.cos(a) * 24;
-        const sy = -28 + Math.sin(a) * 7;
+        const sy = -32 + Math.sin(a) * 7;
         ctx.font = '14px sans-serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
@@ -987,7 +1027,6 @@
   }
 
   function drawEffects() {
-    // Feather / Sparkle Particles
     for (const pt of particles) {
       ctx.save();
       ctx.globalAlpha = Math.max(0, pt.alpha);
@@ -998,7 +1037,6 @@
       ctx.restore();
     }
 
-    // Floating +1 popups
     for (const ft of floatingTexts) {
       ctx.save();
       ctx.globalAlpha = Math.max(0, ft.alpha);
@@ -1011,7 +1049,6 @@
       ctx.restore();
     }
 
-    // Impact Flash
     if (flashAlpha > 0) {
       ctx.fillStyle = `rgba(255, 255, 255, ${flashAlpha})`;
       ctx.fillRect(0, 0, width, height);
@@ -1064,26 +1101,76 @@
     startGetReady();
   });
 
+  pauseBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    if (state === 'PAUSED') {
+      startResumeCountdown();
+    } else if (state === 'PLAYING' || state === 'GET_READY' || state === 'COUNTDOWN' || state === 'START') {
+      pauseGame();
+    }
+  });
+
+  resumeBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    startResumeCountdown();
+  });
+
+  restartFromPauseBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    startGetReady();
+  });
+
   window.addEventListener('keydown', (e) => {
+    if (e.code === 'Escape' || e.code === 'KeyP') {
+      e.preventDefault();
+      if (state === 'PLAYING' || state === 'GET_READY') {
+        pauseGame();
+      } else if (state === 'PAUSED') {
+        startResumeCountdown();
+      }
+      return;
+    }
+
     if (e.code === 'Space' || e.code === 'ArrowUp' || e.code === 'KeyW') {
       e.preventDefault();
       if (state === 'START') {
         startGetReady();
       } else if (state === 'PLAYING' || state === 'GET_READY') {
         flap();
+      } else if (state === 'PAUSED') {
+        startResumeCountdown();
       } else if (state === 'GAMEOVER' && gameOverOverlay.classList.contains('active')) {
         startGetReady();
       }
     }
   });
 
-  // Difficulty Selection
+  // Difficulty Selection (Start screen & Pause menu)
   modeButtons.forEach((btn) => {
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
-      modeButtons.forEach((b) => b.classList.remove('active'));
-      btn.classList.add('active');
       currentDifficulty = btn.dataset.difficulty || 'classic';
+      updateHudButtons();
+    });
+  });
+
+  // Theme Selection (Start screen & Pause menu)
+  themeButtons.forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      currentThemeIndex = parseInt(btn.dataset.theme || '0', 10) || 0;
+      safeSet(STORAGE_KEYS.theme, currentThemeIndex);
+      updateHudButtons();
+    });
+  });
+
+  // Style Selection (Pause menu)
+  styleButtons.forEach((btn) => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      avatarStyle = btn.dataset.style || 'cutout';
+      safeSet(STORAGE_KEYS.style, avatarStyle);
+      updateHudButtons();
     });
   });
 
@@ -1109,10 +1196,10 @@
     avatarStyle = avatarStyle === 'cutout' ? 'badge' : 'cutout';
     safeSet(STORAGE_KEYS.style, avatarStyle);
     updateHudButtons();
-    showMilestoneToast(avatarStyle === 'cutout' ? '🧢 Cutout Ryan Mode' : '🪙 Badge Ryan Mode');
+    showMilestoneToast(avatarStyle === 'cutout' ? '🧢 Cutout Ryan Mode' : '🖼️ Framed Photo Mode');
   });
 
-  // Share Score Button (Mobile Web Share API + Clipboard fallback)
+  // Share Score Button
   shareBtn.addEventListener('click', async (e) => {
     e.stopPropagation();
     const shareText = `🧢✈️ I scored ${score} (Best: ${bestScore}) in Flappy Ryan! Can you beat me?`;
