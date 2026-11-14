@@ -283,6 +283,31 @@
 
   const sfx = new SoundFX();
 
+  // Background Music (Alabama.mp3)
+  const bgMusic = new Audio('audio/Alabama.mp3');
+  bgMusic.loop = true;
+  bgMusic.volume = 0.6;
+  bgMusic.preload = 'auto';
+
+  function playMusic(restartIfStopped = false) {
+    if (!soundEnabled) return;
+    try {
+      if (restartIfStopped && bgMusic.paused) {
+        bgMusic.currentTime = 0;
+      }
+      const p = bgMusic.play();
+      if (p && typeof p.catch === 'function') {
+        p.catch(() => {});
+      }
+    } catch (_) {}
+  }
+
+  function pauseMusic() {
+    try {
+      bgMusic.pause();
+    } catch (_) {}
+  }
+
   // Game State: 'START' | 'GET_READY' | 'PLAYING' | 'PAUSED' | 'COUNTDOWN' | 'GAMEOVER'
   let state = 'START';
   let width = 420;
@@ -436,6 +461,7 @@
   function pauseGame() {
     if (state === 'PLAYING' || state === 'GET_READY' || state === 'COUNTDOWN') {
       clearCountdown();
+      pauseMusic();
       state = 'PAUSED';
       pauseOverlay.classList.add('active');
       pauseOverlay.setAttribute('aria-hidden', 'false');
@@ -474,6 +500,7 @@
       } else {
         clearCountdown();
         sfx.tick(true);
+        playMusic(false);
         state = 'PLAYING';
         // Give Ryan a gentle upward float on resume so the player isn't immediately dropping fast
         bird.vy = Math.min(bird.vy, -3.5);
@@ -554,6 +581,7 @@
     liveScoreContainer.classList.add('visible');
     shareFeedback.textContent = '';
     updateHudButtons();
+    playMusic(false);
     flap();
   }
 
@@ -1180,7 +1208,14 @@
     soundEnabled = !soundEnabled;
     safeSet(STORAGE_KEYS.sound, soundEnabled);
     updateHudButtons();
-    if (soundEnabled) sfx.flap();
+    if (soundEnabled) {
+      sfx.flap();
+      if (state === 'PLAYING' || state === 'GET_READY') {
+        playMusic(false);
+      }
+    } else {
+      pauseMusic();
+    }
   });
 
   themeToggleBtn.addEventListener('click', (e) => {
